@@ -10,6 +10,7 @@ AIRO_TRAJECTORY_SERVER::AIRO_TRAJECTORY_SERVER(ros::NodeHandle& nh){
     local_twist_sub = nh.subscribe<geometry_msgs::TwistStamped>(TWIST_TOPIC,5,&AIRO_TRAJECTORY_SERVER::twist_cb,this);
     fsm_info_sub = nh.subscribe<airo_message::FSMInfo>("/airo_control/fsm_info",1,&AIRO_TRAJECTORY_SERVER::fsm_info_cb,this);
     attitude_target_sub = nh.subscribe<mavros_msgs::AttitudeTarget>("/mavros/setpoint_raw/attitude",5,&AIRO_TRAJECTORY_SERVER::attitude_target_cb,this);
+    battery_sub = nh.subscribe<sensor_msgs::BatteryState>("/mavros/battery",1,&AIRO_TRAJECTORY_SERVER::battery_cb,this);
     command_pub = nh.advertise<airo_message::Reference>("/airo_control/setpoint",1);
     command_preview_pub = nh.advertise<airo_message::ReferencePreview>("/airo_control/setpoint_preview",1);
     takeoff_land_pub = nh.advertise<airo_message::TakeoffLandTrigger>("/airo_control/takeoff_land_trigger",1);
@@ -64,6 +65,12 @@ void AIRO_TRAJECTORY_SERVER::attitude_target_cb(const mavros_msgs::AttitudeTarge
     attitude_target.header = msg->header;
     attitude_target.orientation = msg->orientation;
     attitude_target.thrust = msg->thrust;
+}
+
+void AIRO_TRAJECTORY_SERVER::battery_cb(const sensor_msgs::BatteryState::ConstPtr& msg){
+    battery_state.header = msg->header;
+    battery_state.voltage = msg->voltage;
+    battery_state.current = msg->current;
 }
 
 void AIRO_TRAJECTORY_SERVER::mpc_debug_cb(const std_msgs::Float64MultiArray::ConstPtr& msg){
@@ -559,6 +566,7 @@ void AIRO_TRAJECTORY_SERVER::update_log(const airo_message::Reference& ref){
         line_to_push.push_back(target_euler.z()); // psi ref
         line_to_push.push_back(local_euler.z()); // psi
         line_to_push.push_back(attitude_target.thrust); // thrust
+        line_to_push.push_back(battery_state.voltage); // voltage
         if (PUB_DEBUG){
             for (size_t i = 0; i < debug_msg.size();i++){
                 line_to_push.push_back(debug_msg[i]);

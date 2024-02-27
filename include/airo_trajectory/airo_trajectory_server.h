@@ -15,6 +15,7 @@
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/State.h>
 #include <mavros_msgs/AttitudeTarget.h>
+#include <sensor_msgs/BatteryState.h>
 #include <std_msgs/Float64.h>
 #include <std_msgs/Float64MultiArray.h>
 #include <airo_message/FSMInfo.h>
@@ -30,12 +31,13 @@ class AIRO_TRAJECTORY_SERVER{
     bool RESULT_SAVE = false,RESULT_PLOT = false, PUB_DEBUG = false;
     int FSM_FREQUENCY;
 
-    ros::Subscriber local_pose_sub, local_twist_sub, fsm_info_sub, attitude_target_sub, mpc_debug_sub, backstepping_debug_sub, slidingmode_debug_sub;
+    ros::Subscriber local_pose_sub, local_twist_sub, fsm_info_sub, attitude_target_sub, battery_sub, mpc_debug_sub, backstepping_debug_sub, slidingmode_debug_sub;
     ros::Publisher command_pub, command_preview_pub, takeoff_land_pub;
     airo_message::FSMInfo fsm_info;
     geometry_msgs::PoseStamped local_pose;
     geometry_msgs::TwistStamped local_twist;
     mavros_msgs::AttitudeTarget attitude_target;
+    sensor_msgs::BatteryState battery_state;
     double current_twist_norm;
     std::vector<std::vector<double>> log_data; // t,ref_x,x,ref_y,y,ref_z,z,ref_u,u,ref_v,v,ref_w,w,ref_phi,phi,ref_theta,theta,ref_psi,psi,thrust
     int log_counter,log_interval = 5;
@@ -53,6 +55,7 @@ class AIRO_TRAJECTORY_SERVER{
     void twist_cb(const geometry_msgs::TwistStamped::ConstPtr&);
     void fsm_info_cb(const airo_message::FSMInfo::ConstPtr&);
     void attitude_target_cb(const mavros_msgs::AttitudeTarget::ConstPtr&);
+    void battery_cb(const sensor_msgs::BatteryState::ConstPtr&);
     void mpc_debug_cb(const std_msgs::Float64MultiArray::ConstPtr&);
     void backstepping_debug_cb(const std_msgs::Float64MultiArray::ConstPtr&);
     void slidingmode_debug_cb(const std_msgs::Float64MultiArray::ConstPtr&);
