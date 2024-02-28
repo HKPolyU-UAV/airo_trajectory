@@ -582,7 +582,7 @@ void AIRO_TRAJECTORY_SERVER::update_log(const airo_message::Reference& ref){
 
 int AIRO_TRAJECTORY_SERVER::save_result(){
     // Define column headers
-    std::vector<std::string> column_headers = {"time","ref_x","x","ref_y","y","ref_z","z","ref_u","u","ref_v","v","ref_w","w","ref_phi","phi","ref_theta","theta","ref_psi","psi","thrust"};
+    std::vector<std::string> column_headers = {"time","ref_x","x","ref_y","y","ref_z","z","ref_u","u","ref_v","v","ref_w","w","ref_phi","phi","ref_theta","theta","ref_psi","psi","thrust","voltage"};
     if (PUB_DEBUG){
         std::vector<std::string> debug_header;
         if (CONTROLLER_TYPE == "mpc"){
