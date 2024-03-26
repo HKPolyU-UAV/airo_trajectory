@@ -19,7 +19,7 @@
 #include <std_msgs/Float64MultiArray.h>
 #include <airo_message/FSMInfo.h>
 #include <airo_message/TakeoffLandTrigger.h>
-#include <airo_message/Reference.h>
+#include <airo_message/ReferenceStamped.h>
 #include <airo_message/ReferencePreview.h>
 
 class AIRO_TRAJECTORY_SERVER{
@@ -37,14 +37,18 @@ class AIRO_TRAJECTORY_SERVER{
     geometry_msgs::TwistStamped local_twist;
     mavros_msgs::AttitudeTarget attitude_target;
     double current_twist_norm;
-    std::vector<std::vector<double>> log_data; // t,ref_x,x,ref_y,y,ref_z,z,ref_u,u,ref_v,v,ref_w,w,ref_phi,phi,ref_theta,theta,ref_psi,psi,thrust
-    int log_counter,log_interval = 5;
+
+    // For data logging
+    std::string log_path;
+    std::vector<double> line_to_push; // t,ref_x,x,ref_y,y,ref_z,z,ref_u,u,ref_v,v,ref_w,w,ref_phi,phi,ref_theta,theta,ref_psi,psi,thrust
     std::vector<double> debug_msg;
+    bool traj_started = false;
+    ros::Time traj_start_time;
 
     // For MPC
     bool mpc_enable_preview = false, use_preview = false;
     const int preview_size = 21;
-    const int row_interval = 5; // trajectory file at 100hz, mpc prediction at 20hz, so publish traj every 5 rows
+    int row_interval;
 
     public:
 
@@ -75,18 +79,18 @@ class AIRO_TRAJECTORY_SERVER{
     geometry_msgs::Pose get_end_pose(const std::vector<std::vector<double>>&);
     bool file_cmd(const std::vector<std::vector<double>>& traj, int&);
     void assign_position(const std::vector<std::vector<double>>&, airo_message::ReferencePreview&);
-    void assign_position(const std::vector<double>&, airo_message::Reference&);
+    void assign_position(const std::vector<double>&, airo_message::ReferenceStamped&);
     void assign_twist(const std::vector<std::vector<double>>&, airo_message::ReferencePreview&);
-    void assign_twist(const std::vector<double>&, airo_message::Reference&);
+    void assign_twist(const std::vector<double>&, airo_message::ReferenceStamped&);
     void assign_accel(const std::vector<std::vector<double>>&, airo_message::ReferencePreview&);
-    void assign_accel(const std::vector<double>&, airo_message::Reference&);
+    void assign_accel(const std::vector<double>&, airo_message::ReferenceStamped&);
     void assign_yaw(const std::vector<std::vector<double>>&, airo_message::ReferencePreview&);
-    void assign_yaw(const std::vector<double>&, airo_message::Reference&);
+    void assign_yaw(const std::vector<double>&, airo_message::ReferenceStamped&);
     bool takeoff();
     bool land();
     void update_log(const airo_message::ReferencePreview&);
-    void update_log(const airo_message::Reference&);
-    int save_result();
+    void update_log(const airo_message::ReferenceStamped&);
+    void init_log();
 };
 
 #endif

@@ -10,7 +10,7 @@ AIRO_TRAJECTORY_SERVER::AIRO_TRAJECTORY_SERVER(ros::NodeHandle& nh){
     local_twist_sub = nh.subscribe<geometry_msgs::TwistStamped>(TWIST_TOPIC,5,&AIRO_TRAJECTORY_SERVER::twist_cb,this);
     fsm_info_sub = nh.subscribe<airo_message::FSMInfo>("/airo_control/fsm_info",1,&AIRO_TRAJECTORY_SERVER::fsm_info_cb,this);
     attitude_target_sub = nh.subscribe<mavros_msgs::AttitudeTarget>("/mavros/setpoint_raw/attitude",5,&AIRO_TRAJECTORY_SERVER::attitude_target_cb,this);
-    command_pub = nh.advertise<airo_message::Reference>("/airo_control/setpoint",1);
+    command_pub = nh.advertise<airo_message::ReferenceStamped>("/airo_control/setpoint",1);
     command_preview_pub = nh.advertise<airo_message::ReferencePreview>("/airo_control/setpoint_preview",1);
     takeoff_land_pub = nh.advertise<airo_message::TakeoffLandTrigger>("/airo_control/takeoff_land_trigger",1);
     if (CONTROLLER_TYPE == "mpc"){
@@ -134,13 +134,13 @@ void AIRO_TRAJECTORY_SERVER::pose_cmd(const geometry_msgs::Point& point, const g
 
 void AIRO_TRAJECTORY_SERVER::pose_cmd(const geometry_msgs::Point& point, const geometry_msgs::Twist& twist, const geometry_msgs::Accel& accel, const double& yaw_angle){
     if(fsm_info.is_waiting_for_command){
-        airo_message::Reference reference;
+        airo_message::ReferenceStamped reference;
         reference.header.stamp = ros::Time::now();
-        reference.ref_pose.position = point;
-        reference.ref_pose.orientation = AIRO_TRAJECTORY_SERVER::yaw2q(yaw_angle);
-        reference.ref_twist = twist;
-        reference.ref_accel = accel;
-        
+        reference.ref.pose.position = point;
+        reference.ref.pose.orientation = AIRO_TRAJECTORY_SERVER::yaw2q(yaw_angle);
+        reference.ref.twist = twist;
+        reference.ref.accel = accel;
+
         ROS_INFO_STREAM_THROTTLE(2.0, "[AIRo Trajectory] Publishing pose command.");
         command_pub.publish(reference);
     }
@@ -210,10 +210,14 @@ void AIRO_TRAJECTORY_SERVER::file_traj_init(const std::string& file_name, std::v
     int number_of_lines = 0;
     traj.clear();
     if (RESULT_SAVE){
-        log_data.clear();
-        log_counter = log_interval;
+        init_log();
     }
-
+    if (use_preview){
+        row_interval = FSM_FREQUENCY / (preview_size -1);
+        if (FSM_FREQUENCY%(preview_size -1) != 0){
+            ROS_ERROR("[AIRo Trajectory] FSM frequency is not integer multiple of MPC preview frequency. Trajectory file may being published at wrong rate!");
+        }
+    }
     if(file.is_open()){
         while(getline(file, line)){
             number_of_lines++;
@@ -297,9 +301,7 @@ bool AIRO_TRAJECTORY_SERVER::file_cmd(const std::vector<std::vector<double>>& tr
 
         airo_message::ReferencePreview reference_preview;
         reference_preview.header.stamp = ros::Time::now();
-        reference_preview.ref_pose.resize(preview_size);
-        reference_preview.ref_twist.resize(preview_size);
-        reference_preview.ref_accel.resize(preview_size);
+        reference_preview.ref_preview.resize(preview_size);
         int column = traj_matrix[0].size();
 
         if (!path_ended){
@@ -358,7 +360,7 @@ bool AIRO_TRAJECTORY_SERVER::file_cmd(const std::vector<std::vector<double>>& tr
             // Update the start_row for the next call
             start_row++;
         }
-        airo_message::Reference reference;
+        airo_message::ReferenceStamped reference;
         reference.header.stamp = ros::Time::now();
         int column = traj_row.size();
 
@@ -420,68 +422,68 @@ bool AIRO_TRAJECTORY_SERVER::file_cmd(const std::vector<std::vector<double>>& tr
 
 void AIRO_TRAJECTORY_SERVER::assign_position(const std::vector<std::vector<double>>& traj_matrix, airo_message::ReferencePreview& reference_preview){
     for (int i = 0; i < preview_size; i++){
-        reference_preview.ref_pose[i].position.x = traj_matrix[i][0];
-        reference_preview.ref_pose[i].position.y = traj_matrix[i][1];
-        reference_preview.ref_pose[i].position.z = traj_matrix[i][2];
-        reference_preview.ref_pose[i].orientation = AIRO_TRAJECTORY_SERVER::yaw2q(0.0);
-        reference_preview.ref_twist[i].linear.x = 0.0;
-        reference_preview.ref_twist[i].linear.y = 0.0;
-        reference_preview.ref_twist[i].linear.z = 0.0;
-        reference_preview.ref_accel[i].linear.x = 0.0;
-        reference_preview.ref_accel[i].linear.y = 0.0;
-        reference_preview.ref_accel[i].linear.z = 0.0;
+        reference_preview.ref_preview[i].pose.position.x = traj_matrix[i][0];
+        reference_preview.ref_preview[i].pose.position.y = traj_matrix[i][1];
+        reference_preview.ref_preview[i].pose.position.z = traj_matrix[i][2];
+        reference_preview.ref_preview[i].pose.orientation = AIRO_TRAJECTORY_SERVER::yaw2q(0.0);
+        reference_preview.ref_preview[i].twist.linear.x = 0.0;
+        reference_preview.ref_preview[i].twist.linear.y = 0.0;
+        reference_preview.ref_preview[i].twist.linear.z = 0.0;
+        reference_preview.ref_preview[i].accel.linear.x = 0.0;
+        reference_preview.ref_preview[i].accel.linear.y = 0.0;
+        reference_preview.ref_preview[i].accel.linear.z = 0.0;
     }
 }
 
-void AIRO_TRAJECTORY_SERVER::assign_position(const std::vector<double>& traj_row, airo_message::Reference& reference){
-    reference.ref_pose.position.x = traj_row[0];
-    reference.ref_pose.position.y = traj_row[1];
-    reference.ref_pose.position.z = traj_row[2];
-    reference.ref_pose.orientation = AIRO_TRAJECTORY_SERVER::yaw2q(0.0);
-    reference.ref_twist.linear.x = 0.0;
-    reference.ref_twist.linear.y = 0.0;
-    reference.ref_twist.linear.z = 0.0;
-    reference.ref_accel.linear.x = 0.0;
-    reference.ref_accel.linear.y = 0.0;
-    reference.ref_accel.linear.z = 0.0;
+void AIRO_TRAJECTORY_SERVER::assign_position(const std::vector<double>& traj_row, airo_message::ReferenceStamped& reference){
+    reference.ref.pose.position.x = traj_row[0];
+    reference.ref.pose.position.y = traj_row[1];
+    reference.ref.pose.position.z = traj_row[2];
+    reference.ref.pose.orientation = AIRO_TRAJECTORY_SERVER::yaw2q(0.0);
+    reference.ref.twist.linear.x = 0.0;
+    reference.ref.twist.linear.y = 0.0;
+    reference.ref.twist.linear.z = 0.0;
+    reference.ref.accel.linear.x = 0.0;
+    reference.ref.accel.linear.y = 0.0;
+    reference.ref.accel.linear.z = 0.0;
 }
 
 void AIRO_TRAJECTORY_SERVER::assign_twist(const std::vector<std::vector<double>>& traj_matrix, airo_message::ReferencePreview& reference_preview){
     for (int i = 0; i < preview_size; i++){
-        reference_preview.ref_twist[i].linear.x = traj_matrix[i][3];
-        reference_preview.ref_twist[i].linear.y = traj_matrix[i][4];
-        reference_preview.ref_twist[i].linear.z = traj_matrix[i][5];
+        reference_preview.ref_preview[i].twist.linear.x = traj_matrix[i][3];
+        reference_preview.ref_preview[i].twist.linear.y = traj_matrix[i][4];
+        reference_preview.ref_preview[i].twist.linear.z = traj_matrix[i][5];
     }
 }
 
-void AIRO_TRAJECTORY_SERVER::assign_twist(const std::vector<double>& traj_row, airo_message::Reference& reference){
-    reference.ref_twist.linear.x = traj_row[3];
-    reference.ref_twist.linear.y = traj_row[4];
-    reference.ref_twist.linear.z = traj_row[5];
+void AIRO_TRAJECTORY_SERVER::assign_twist(const std::vector<double>& traj_row, airo_message::ReferenceStamped& reference){
+    reference.ref.twist.linear.x = traj_row[3];
+    reference.ref.twist.linear.y = traj_row[4];
+    reference.ref.twist.linear.z = traj_row[5];
 }
 
 void AIRO_TRAJECTORY_SERVER::assign_accel(const std::vector<std::vector<double>>& traj_matrix, airo_message::ReferencePreview& reference_preview){
     for (int i = 0; i < preview_size; i++){
-        reference_preview.ref_accel[i].linear.x = traj_matrix[i][6];
-        reference_preview.ref_accel[i].linear.y = traj_matrix[i][7];
-        reference_preview.ref_accel[i].linear.z = traj_matrix[i][8];
+        reference_preview.ref_preview[i].accel.linear.x = traj_matrix[i][6];
+        reference_preview.ref_preview[i].accel.linear.y = traj_matrix[i][7];
+        reference_preview.ref_preview[i].accel.linear.z = traj_matrix[i][8];
     }
 }
 
-void AIRO_TRAJECTORY_SERVER::assign_accel(const std::vector<double>& traj_row, airo_message::Reference& reference){
-    reference.ref_accel.linear.x = traj_row[6];
-    reference.ref_accel.linear.y = traj_row[7];
-    reference.ref_accel.linear.z = traj_row[8];
+void AIRO_TRAJECTORY_SERVER::assign_accel(const std::vector<double>& traj_row, airo_message::ReferenceStamped& reference){
+    reference.ref.accel.linear.x = traj_row[6];
+    reference.ref.accel.linear.y = traj_row[7];
+    reference.ref.accel.linear.z = traj_row[8];
 }
 
 void AIRO_TRAJECTORY_SERVER::assign_yaw(const std::vector<std::vector<double>>& traj_matrix, airo_message::ReferencePreview& reference_preview){
     for (int i = 0; i < preview_size; i++){
-        reference_preview.ref_pose[i].orientation = AIRO_TRAJECTORY_SERVER::yaw2q(traj_matrix[i].back());
+        reference_preview.ref_preview[i].pose.orientation = AIRO_TRAJECTORY_SERVER::yaw2q(traj_matrix[i].back());
     }
 }
 
-void AIRO_TRAJECTORY_SERVER::assign_yaw(const std::vector<double>& traj_row, airo_message::Reference& reference){
-    reference.ref_pose.orientation = AIRO_TRAJECTORY_SERVER::yaw2q(traj_row.back());
+void AIRO_TRAJECTORY_SERVER::assign_yaw(const std::vector<double>& traj_row, airo_message::ReferenceStamped& reference){
+    reference.ref.pose.orientation = AIRO_TRAJECTORY_SERVER::yaw2q(traj_row.back());
 }
 
 bool AIRO_TRAJECTORY_SERVER::takeoff(){
@@ -513,9 +515,6 @@ bool AIRO_TRAJECTORY_SERVER::land(){
     }
     else if(fsm_info.is_landed == true){
         ROS_INFO("[AIRo Trajectory] Vehicle has landed!");
-        if (RESULT_SAVE){
-            save_result();
-        }
         return true;
     }
     else{
@@ -524,55 +523,67 @@ bool AIRO_TRAJECTORY_SERVER::land(){
 }
 
 void AIRO_TRAJECTORY_SERVER::update_log(const airo_message::ReferencePreview& ref_preview){
-    airo_message::Reference ref;
+    airo_message::ReferenceStamped ref;
     ref.header = ref_preview.header;
-    ref.ref_pose = ref_preview.ref_pose[0];
-    ref.ref_twist = ref_preview.ref_twist[0];
-    ref.ref_accel = ref_preview.ref_accel[0];
+    ref.ref.pose = ref_preview.ref_preview[0].pose;
+    ref.ref.twist = ref_preview.ref_preview[0].twist;
+    ref.ref.accel = ref_preview.ref_preview[0].accel;
     update_log(ref);
 }
 
-void AIRO_TRAJECTORY_SERVER::update_log(const airo_message::Reference& ref){
-    if (log_counter == log_interval){
-        std::vector<double> line_to_push;
-        Eigen::Vector3d local_euler,target_euler;
-        local_euler = q2rpy(local_pose.pose.orientation);
-        target_euler = q2rpy(attitude_target.orientation);
+void AIRO_TRAJECTORY_SERVER::update_log(const airo_message::ReferenceStamped& ref){
+    Eigen::Vector3d local_euler,target_euler;
+    local_euler = q2rpy(local_pose.pose.orientation);
+    target_euler = q2rpy(attitude_target.orientation);
 
-        line_to_push.push_back(static_cast<double>(log_data.size())*log_interval/FSM_FREQUENCY); // time
-        line_to_push.push_back(ref.ref_pose.position.x); // x position ref
-        line_to_push.push_back(local_pose.pose.position.x); // x position
-        line_to_push.push_back(ref.ref_pose.position.y); // y position ref
-        line_to_push.push_back(local_pose.pose.position.y); // y position
-        line_to_push.push_back(ref.ref_pose.position.z); // z position ref
-        line_to_push.push_back(local_pose.pose.position.z); // z position
-        line_to_push.push_back(ref.ref_twist.linear.x); // x velocity ref
-        line_to_push.push_back(local_twist.twist.linear.x); // x velocity
-        line_to_push.push_back(ref.ref_twist.linear.y); // y velocity ref
-        line_to_push.push_back(local_twist.twist.linear.y); // y velocity
-        line_to_push.push_back(ref.ref_twist.linear.z); // z velocity ref
-        line_to_push.push_back(local_twist.twist.linear.z); // z velocity
-        line_to_push.push_back(target_euler.x()); // phi ref
-        line_to_push.push_back(local_euler.x()); // phi
-        line_to_push.push_back(target_euler.y()); // theta ref
-        line_to_push.push_back(local_euler.y()); // theta
-        line_to_push.push_back(target_euler.z()); // psi ref
-        line_to_push.push_back(local_euler.z()); // psi
-        line_to_push.push_back(attitude_target.thrust); // thrust
-        if (PUB_DEBUG){
-            for (size_t i = 0; i < debug_msg.size();i++){
-                line_to_push.push_back(debug_msg[i]);
-            }
-        }
-        log_data.push_back(line_to_push);
-        log_counter = 1;
+    line_to_push.clear();
+    if (!traj_started){
+        traj_started = true;
+        line_to_push.push_back(0.0); // time
+        traj_start_time = ros::Time::now();
     }
     else{
-        log_counter++;
+        line_to_push.push_back((ros::Time::now() - traj_start_time).toSec()); // time
+    }
+    line_to_push.push_back(ref.ref.pose.position.x); // x position ref
+    line_to_push.push_back(local_pose.pose.position.x); // x position
+    line_to_push.push_back(ref.ref.pose.position.y); // y position ref
+    line_to_push.push_back(local_pose.pose.position.y); // y position
+    line_to_push.push_back(ref.ref.pose.position.z); // z position ref
+    line_to_push.push_back(local_pose.pose.position.z); // z position
+    line_to_push.push_back(ref.ref.twist.linear.x); // x velocity ref
+    line_to_push.push_back(local_twist.twist.linear.x); // x velocity
+    line_to_push.push_back(ref.ref.twist.linear.y); // y velocity ref
+    line_to_push.push_back(local_twist.twist.linear.y); // y velocity
+    line_to_push.push_back(ref.ref.twist.linear.z); // z velocity ref
+    line_to_push.push_back(local_twist.twist.linear.z); // z velocity
+    line_to_push.push_back(target_euler.x()); // phi ref
+    line_to_push.push_back(local_euler.x()); // phi
+    line_to_push.push_back(target_euler.y()); // theta ref
+    line_to_push.push_back(local_euler.y()); // theta
+    line_to_push.push_back(target_euler.z()); // psi ref
+    line_to_push.push_back(local_euler.z()); // psi
+    line_to_push.push_back(attitude_target.thrust); // thrust
+    if (PUB_DEBUG){
+        for (size_t i = 0; i < debug_msg.size();i++){
+            line_to_push.push_back(debug_msg[i]);
+        }
+    }
+    
+    std::ofstream out_file(log_path,std::ios::app);
+    if (out_file.is_open()){
+        for (size_t i = 0; i < line_to_push.size(); ++i){
+            out_file << line_to_push[i];
+            if (i < line_to_push.size() -1){
+                out_file<<",";
+            }
+        }
+        out_file << "\n";
+        out_file.close();
     }
 }
 
-int AIRO_TRAJECTORY_SERVER::save_result(){
+void AIRO_TRAJECTORY_SERVER::init_log(){
     // Define column headers
     std::vector<std::string> column_headers = {"time","ref_x","x","ref_y","y","ref_z","z","ref_u","u","ref_v","v","ref_w","w","ref_phi","phi","ref_theta","theta","ref_psi","psi","thrust"};
     if (PUB_DEBUG){
@@ -610,7 +621,7 @@ int AIRO_TRAJECTORY_SERVER::save_result(){
 
     if (!package_path.empty()) {
         // Construct the full file path
-        std::string log_path = package_path + "/results/" + time_stamp + ".csv";
+        log_path = package_path + "/results/" + time_stamp + ".csv";
 
         // Open the file for writing
         std::ofstream out_file(log_path);
@@ -626,25 +637,11 @@ int AIRO_TRAJECTORY_SERVER::save_result(){
             }
             out_file << "\n";
 
-            // Write the data to the CSV file
-            for (const std::vector<double>& row : log_data) {
-                for (size_t i = 0; i < row.size(); ++i) {
-                    out_file << row[i];
-                    if (i < row.size() - 1) {
-                        out_file << ",";
-                    }
-                }
-                out_file << "\n";
-            }
-
             // Close the file
             out_file.close();
-
-            ROS_INFO_STREAM("[AIRo Trajectory] Data saved to " << log_path);
+            ROS_INFO_STREAM("[AIRo Trajectory] Data saving to " << log_path);
         } else {
             ROS_ERROR_STREAM("[AIRo Trajectory] Failed to open the file for writing: " << log_path);
         }
     }
-
-    return 0;
 }
