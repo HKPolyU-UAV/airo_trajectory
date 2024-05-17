@@ -12,16 +12,16 @@ output_path = package_path + '/scripts/circle.txt'
 
 # Parameters
 sample_time = 1/frequency      # seconds
-duration = 40                  # seconds
+duration = 20                  # seconds
 
-r = 1.5                        # m
-# v = 1.5                        # m/s
-v = np.arange(1.5,2.5,(2.5-1.5)*sample_time/duration)
-v = np.append(v,2.5)
+r = 1.8                        # m
+v = 2.0                        # m/s
+# v = np.arange(1.5,2.5,(2.5-1.5)*sample_time/duration)
+# v = np.append(v,2.5)
 
 # Circle Center
-x0 = 0.2                
-y0 = 0.3
+x0 = 0.5                
+y0 = 0.5
 z0 = 1.0
 
 # Trajectory
@@ -38,7 +38,8 @@ traj[:,5] = 0.0
 traj[:,6] = v*v/r*np.cos(t*v/r)
 traj[:,7] = v*v/r*np.sin(t*v/r)
 traj[:,8] = 0.0
-traj[:,9] = 0.0
+traj[:,9] = np.arctan2(np.sin(t*v/r),np.cos(t*v/r))
+# traj[:,9] = 0.0
 
 # write to txt
 np.savetxt(output_path,traj,fmt='%f')
