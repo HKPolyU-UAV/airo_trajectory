@@ -11,7 +11,7 @@ enum State{
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "example_mission_node");
+    ros::init(argc, argv, "trajectory_example_node");
     ros::NodeHandle nh;
     int FSM_FREQUENCY;
     nh.getParam("/airo_control_node/fsm/fsm_frequency",FSM_FREQUENCY);

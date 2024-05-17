@@ -34,10 +34,10 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(example_mission_node
-    src/example_mission_node.cpp
+add_executable(trajectory_example_node
+    src/trajectory_example_node.cpp
     src/airo_trajectory_server.cpp)
-target_link_libraries(example_mission_node
+target_link_libraries(trajectory_example_node
   ${catkin_LIBRARIES}
 )
 add_dependencies(example_mission_node airo_message_generate_messages_cpp)
