@@ -27,6 +27,8 @@ int main(int argc, char **argv)
     State state = TAKEOFF;
 
     while(ros::ok()){
+        ros::spinOnce();
+
         switch(state){
             case TAKEOFF:{
                 if(airo_trajectory_server.takeoff()){
@@ -60,7 +62,6 @@ int main(int argc, char **argv)
             }
         }
 
-        ros::spinOnce();
         ros::Duration(rate).sleep();
     }
 

@@ -15,7 +15,7 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
     int FSM_FREQUENCY;
     nh.getParam("/airo_control_node/fsm/fsm_frequency",FSM_FREQUENCY);
-    ros::Rate rate(20.0);
+    ros::Rate rate(FSM_FREQUENCY);
     AIRO_TRAJECTORY_SERVER airo_trajectory_server(nh);
 
     State state = TAKEOFF;
@@ -42,6 +42,8 @@ int main(int argc, char **argv)
     target_twist.linear.z = 0.5;
 
     while(ros::ok()){
+        ros::spinOnce();
+
         switch(state){
             case TAKEOFF:{
                 if(airo_trajectory_server.takeoff()){
@@ -78,7 +80,6 @@ int main(int argc, char **argv)
             }
         }
 
-        ros::spinOnce();
         ros::Duration(rate).sleep();
     }
 
